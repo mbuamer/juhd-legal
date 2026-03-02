@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/download",
+      "destination": "https://apps.apple.com/app/id6759345618",
+      "permanent": false
+    }
+  ]
+}
