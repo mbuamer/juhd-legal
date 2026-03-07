@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Post — JUHD</title>
+    <meta name="description" content="View this post on JUHD — Track. Lift. Dominate.">
+    <!-- Open Graph / link preview (og:image + og:description updated by JS when post loads) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="JUHD">
+    <meta property="og:title" content="View Post — JUHD">
+    <meta property="og:description" content="Track. Lift. Dominate. — Open in JUHD">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="View Post — JUHD">
+    <meta name="twitter:description" content="Track. Lift. Dominate. — Open in JUHD">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0D0D0D;
+            color: #fff;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        .container { max-width: 480px; margin: 0 auto; padding: 24px 20px; }
+        .logo { font-size: 1.5rem; font-weight: 700; color: #FF3B30; margin-bottom: 1.5rem; }
+        .card {
+            background: rgba(255,255,255,0.06);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        .card-img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            background: rgba(255,255,255,0.03);
+        }
+        .card-img.hidden { display: none; }
+        .card-body { padding: 20px; }
+        .user-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .avatar {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            object-fit: cover;
+        }
+        .username { font-weight: 600; font-size: 1.05rem; }
+        .workout-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 12px; color: #fff; }
+        .caption { color: rgba(255,255,255,0.85); font-size: 0.95rem; margin-bottom: 12px; white-space: pre-wrap; }
+        .stats-row {
+            display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px;
+        }
+        .stat-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(255,255,255,0.08);
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 0.9rem; font-weight: 500;
+        }
+        .stat-chip .icon { opacity: 0.8; }
+        .meta-line { color: rgba(255,255,255,0.6); font-size: 0.9rem; margin-top: 8px; }
+        .cta-row { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .cta {
+            display: inline-block;
+            background: #FF3B30;
+            color: #fff;
+            padding: 14px 28px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: opacity 0.2s;
+        }
+        .cta:hover { opacity: 0.9; }
+        .cta-secondary {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+        .loading, .error { text-align: center; padding: 48px 24px; color: rgba(255,255,255,0.6); }
+        .error { color: #FF3B30; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">JUHD</div>
+        <div id="content">
+            <div class="loading" id="loading">Loading post...</div>
+            <div id="preview" style="display:none;"></div>
+            <div class="error" id="error" style="display:none;"></div>
+        </div>
+    </div>
+    <script>
+        const SUPABASE_URL = 'https://vzauxmocprkljhmufdqy.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6YXV4bW9jcHJrbGpobXVmZHF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwOTgwMzksImV4cCI6MjA2MTY3NDAzOX0.zk1pHfKPQ2N4uzb3BU0qt65M3l82r66vt41go82xCqQ';
+        const APP_STORE_URL = 'https://apps.apple.com/app/id6759345618';
+
+        function getPostId() {
+            const params = new URLSearchParams(window.location.search);
+            let id = params.get('id');
+            if (!id && window.location.pathname.startsWith('/post/')) {
+                id = window.location.pathname.split('/').filter(Boolean)[1];
+            }
+            return id;
+        }
+
+        function formatVolume(vol) {
+            if (vol == null) return '';
+            if (vol >= 1000000) return (vol / 1000000).toFixed(1).replace(/\.0$/, '') + 'm';
+            if (vol >= 1000) return (vol / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+            return String(Math.round(vol));
+        }
+
+        function formatDuration(seconds) {
+            if (seconds == null || seconds < 0) return '';
+            const mins = Math.floor(seconds / 60);
+            const hrs = Math.floor(mins / 60);
+            if (hrs > 0) return hrs + 'h' + (mins % 60 > 0 ? mins % 60 + 'm' : '');
+            return mins + 'm';
+        }
+
+        async function loadPost() {
+            const postId = getPostId();
+            if (!postId) {
+                showError('Invalid link');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/functions/v1/get-post-preview?id=${encodeURIComponent(postId)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'apikey': SUPABASE_ANON_KEY
+                    }
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data.error || 'Post not found');
+                    return;
+                }
+
+                renderPreview(data);
+            } catch (e) {
+                showError('Could not load post');
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').textContent = msg;
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error').innerHTML += '<br><br><a href="' + APP_STORE_URL + '" class="cta">Download JUHD</a>';
+        }
+
+        function renderPreview(p) {
+            document.getElementById('loading').style.display = 'none';
+
+            const currentUrl = window.location.href;
+            const imgUrl = (p.thumbnail_urls && p.thumbnail_urls[0]) || (p.image_urls && p.image_urls[0]);
+            let imgHtml = imgUrl
+                ? `<img class="card-img" src="${imgUrl}" alt="Post" loading="lazy">`
+                : (p.post_type === 'workout_summary' ? '' : '<div class="card-img"></div>');
+
+            // Update OG image for link previews (WhatsApp, iMessage, etc.)
+            if (imgUrl) {
+                let ogImg = document.querySelector('meta[property="og:image"]');
+                if (!ogImg) { ogImg = document.createElement('meta'); ogImg.setAttribute('property', 'og:image'); document.head.appendChild(ogImg); }
+                ogImg.setAttribute('content', imgUrl);
+            }
+            let ogDesc = document.querySelector('meta[property="og:description"]');
+            if (ogDesc && p.post_type === 'workout_summary' && p.workout_name) {
+                const parts = [];
+                if (p.total_volume != null) parts.push(formatVolume(p.total_volume) + ' kg');
+                if (p.total_sets != null) parts.push(p.total_sets + ' sets');
+                ogDesc.setAttribute('content', '@' + p.username + ' · ' + p.workout_name + (parts.length ? ' · ' + parts.join(' · ') : '') + ' — Open in JUHD');
+            }
+
+            let statsHtml = '';
+            let metaLine = '';
+            if (p.post_type === 'workout_summary') {
+                const chips = [];
+                if (p.total_sets != null) chips.push(`<span class="stat-chip"><span class="icon">📊</span>${p.total_sets} sets</span>`);
+                if (p.total_volume != null) chips.push(`<span class="stat-chip"><span class="icon">⚖️</span>${formatVolume(p.total_volume)} kg</span>`);
+                if (p.duration != null && p.duration > 0) chips.push(`<span class="stat-chip"><span class="icon">⏱</span>${formatDuration(p.duration)}</span>`);
+                if (p.calories_burned != null && p.calories_burned > 0) chips.push(`<span class="stat-chip"><span class="icon">🔥</span>${p.calories_burned} kcal</span>`);
+                if (chips.length) statsHtml = `<div class="stats-row">${chips.join('')}</div>`;
+            } else if (p.post_type === 'gym_checkin' && p.gym_name) {
+                metaLine = 'Checked in at ' + escapeHtml(p.gym_name);
+            }
+
+            const profileImg = p.profile_image_url || '';
+            const avatarHtml = profileImg
+                ? `<img class="avatar" src="${profileImg}" alt="">`
+                : `<div class="avatar"></div>`;
+
+            const workoutTitle = (p.post_type === 'workout_summary' && p.workout_name) ? `<div class="workout-title">${escapeHtml(p.workout_name)}</div>` : '';
+
+            const html = `
+                <div class="card">
+                    ${imgHtml}
+                    <div class="card-body">
+                        <div class="user-row">
+                            ${avatarHtml}
+                            <span class="username">@${p.username}</span>
+                        </div>
+                        ${workoutTitle}
+                        ${p.caption ? `<div class="caption">${escapeHtml(p.caption)}</div>` : ''}
+                        ${statsHtml}
+                        ${metaLine ? `<div class="meta-line">${metaLine}</div>` : ''}
+                    </div>
+                </div>
+                <div class="cta-row">
+                    <a href="${currentUrl}" class="cta">Open in JUHD</a>
+                    <a href="${APP_STORE_URL}" class="cta cta-secondary">Download on App Store</a>
+                </div>
+            `;
+
+            document.getElementById('preview').innerHTML = html;
+            document.getElementById('preview').style.display = 'block';
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        loadPost();
+    </script>
+</body>
+</html>

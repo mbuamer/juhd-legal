@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/post/:id", "destination": "/post.html?id=:id" }
+  ],
   "redirects": [
     {
       "source": "/download",
